@@ -1,13 +1,37 @@
+/*
+ * Copyright (c) 2024, KRI, LLC. All rights reserved
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining
+ * a copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
+ */
+
 import express from "express";
 import {ApplicationContext} from "./ApplicationContext.js";
 import {LoggingManager} from "./LoggingManager.js";
 import {LocalCredentialManager} from "./CredentialManager.js";
 import {PropertyManager} from "./PropertyManager.js";
 import {PluginManager} from "./PluginManager.js";
-import {APPLICATION_LOG} from "./ApplicationLog.js"
+import {APPLICATION_LOG, ApplicationLog} from "./ApplicationLog.js"
 import {GlobalErrorHandler} from "./GlobalErrorHandler.js";
 import {PageNotFoundHandler} from "./PageNotFoundHandler.js";
 import {ReplyHandler} from "./ReplyHandler.js";
+import {ApplicationError} from "./Global.js";
+import {NotImplementedHandler} from "./NotImplementedHandler.js";
 
 /**
  * @typedef {ApplicationContext} ApplicationLogContext
@@ -18,8 +42,9 @@ import {ReplyHandler} from "./ReplyHandler.js";
  * @author Robert R Murrell
  */
 export class AzureExpress {
-    static get $object() {return {type: "https://api.krinvestentsllc.com/v1.0.0/AzureExpress"}};
+    static get $object() {return {type: "https://api.azure-expressjs.com/v1.0.0/AzureExpress"}};
     constructor(defaultPath = "/", name = "api", delimiter = "-") {
+        this._initialized = false;
         this._app = express();
         this._name = name;
         this._path = defaultPath;
@@ -27,7 +52,10 @@ export class AzureExpress {
         this._router = express.Router();
         /**@type{ApplicationLogContext}*/this._context = /**@type{ApplicationLogContext}*/new ApplicationContext(this._prefix);
         /**@type{null||http.Server}*/this._server = null;
+        /**@type{ApplicationLog}*/this._log = null;
     }
+
+    /**@returns{boolean}*/get initialized() {return this._initialized;}
 
     /**
      * @description
@@ -42,16 +70,21 @@ export class AzureExpress {
     /**@returns{Express}*/get app() {return this._app;}
     /**@returns{ApplicationContext}*/get context() {return this._context;}
     /**@returns{http.Server}*/get server() {return this._server;}
+    /**@returns{ApplicationLog}*/get log() {
+        if(this._log) return this._log;
+        else return APPLICATION_LOG;
+    }
 
     /**
      * @return {Promise<void>}
      * @private
      */
     async _initializeLoggingManager() {
-        console.log("Initializing Logging Manager...");
+        APPLICATION_LOG.info("Initializing Logging Manager...");
         let _logManager = new LoggingManager(/**@type{ApplicationContext}*/this._context);
         this._context.addManager(_logManager);
         this._context.log = _logManager.logger;
+        this._log = _logManager.logger;
         this._app.use(_logManager.loggingMiddleware);
         APPLICATION_LOG.info("Logging Manager initialized. All future logging will be in JSON format through Winston.");
     }
@@ -99,7 +132,7 @@ export class AzureExpress {
      * @private
      */
     async _initialize() {
-        APPLICATION_LOG.info("Express JSON middleware added.");
+        APPLICATION_LOG.info("Using Express.js JSON middleware.");
         this._app.use(express.json()); // Set it up for JSON
 
         await this._initializeLoggingManager();
@@ -107,18 +140,15 @@ export class AzureExpress {
         await this._initializePropertiesManager();
         await this._initializePluginManager();
 
-        this._context.log.info("Reply Handler middleware added.");
+        this._context.log.info("Using ReplyHandler.");
         this._app.use(ReplyHandler); // Add the structured reply
     }
 
     /**
-     *
-     * @param {() => void} callback
-     * @param {null|number} port
-     * @returns {Promise<http.Server>}
+     * @description
+     * @return {Promise<AzureExpress>}
      */
-    async start(callback = null, port = null) {
-        let _port = port ||this._context.getEnvironmentProperty("PORT") || process.env.PORT  || 3000;
+    async initialize() {
         console.log("  ___                     _____");
         console.log(" / _ \\                   |  ___|");
         console.log("/ /_\\ \\_____   _ _ __ ___| |____  ___ __  _ __ ___  ___ ___ ");
@@ -129,20 +159,36 @@ export class AzureExpress {
         console.log("                                   |_|");
         console.log();
         console.log("Copyright (c) 2024 KRI, LLC. All Rights reserved.");
-        console.log(`Starting AzureExpress application '${this._name}' on port ${_port}...`);
+        console.log(`Initializing AzureExpress application '${this._name}'...`);
 
         // Do all the initialization stuffs.
         await this._initialize();
+        this._initialized = true;
+        return this;
+    }
 
-        this._context.log.info(`Adding default router to path '${this._path}'.`);
+    /**
+     * @description
+     * @param {null|number} port
+     * @returns {Promise<AzureExpress>}
+     */
+    async start(port = 3000) {
+        if(!this._initialized)
+            throw new ApplicationError("AzureExpress not initialized. Please invoke initialise() before start().");
+
+        let _port = port ||this._context.getEnvironmentProperty("PORT") || process.env.PORT  || 3000;
+
+        this._context.log.info(`Starting AzureExpress application '${this._name}' on port ${_port}...`);
+        this._context.log.info(`Using default router to path '${this._path}'.`);
         this._app.use(this._path, this._router);
-        this._context.log.info("Default router added, adding default 404 and global error handlers.");
+        this._context.log.info("Using NotImplementedHandler, PageNotFoundHandler, and  GlobalErrorHandler.");
+        this._app.use(NotImplementedHandler);
         this._app.use(PageNotFoundHandler);
         this._app.use(GlobalErrorHandler);
-        this._context.log.info("Default 404 and global error handlers added.");
+        this._context.log.info("NotImplementedHandler, PageNotFoundHandler, and  GlobalErrorHandler added.");
 
         this._context.log.info(`Application starting on port ${_port}.`);
-        this._server = this._app.listen(_port, callback);
-        return this._server;
+        this._server = this._app.listen(_port);
+        return this;
     }
 }

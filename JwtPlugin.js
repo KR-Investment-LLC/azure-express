@@ -1,9 +1,35 @@
+/*
+ * Copyright (c) 2024, KRI, LLC. All rights reserved
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining
+ * a copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
+ */
 
 import _ from "lodash";
 import {Issuer} from 'openid-client';
 import jwt from 'jsonwebtoken';
-import {APPLICATION_LOG} from "./ApplicationLog.js";
-import {ApplicationError, RestRequest} from "./Global.js";
+import {
+    ApplicationError,
+    ForbiddenError,
+    isInstanceOf,
+    MethodNotImplementedError,
+    NotAuthorizedError
+} from "./Global.js";
 import {AbstractPlugin} from "./AbstractPlugin.js";
 import {AbstractRoleFactory} from "./AbstractRoleFactory.js";
 import {AbstractTokenFactory} from "./AbstractTokenFactory.js";
@@ -26,7 +52,7 @@ import {PluginManager} from "./PluginManager.js";
  * @description
  */
 export class JwtValidator {
-    static get $object() {return {type: "https://api.krinvestentsllc.com/v1.0.0/JwtValidator"}};
+    static get $object() {return {type: "https://api.azure-expressjs.com/v1.0.0/JwtValidator"}};
     /**
      * @param {ApplicationLog} log
      * @param {Object} issuers
@@ -50,7 +76,7 @@ export class JwtValidator {
         let _decoded = jwt.decode(token, {complete: true});
         if(!_decoded) {
             this.log.threat("Invalid token, unable to decode.");
-            throw ApplicationError.NotAuthorizedError();
+            throw new NotAuthorizedError(null, "Invalid token, unable to decode.");
         }
         return _decoded;
     }
@@ -58,14 +84,13 @@ export class JwtValidator {
     /**
      *
      * @param {string} issuer
+     * @param {string} subject
      * @returns {IssuerConfig}
      */
-    getIssuer(issuer) {
+    getIssuer(issuer, subject) {
         let _issuer = this._issuers[issuer];
-        if(!_issuer) {
-            this.log.threat(`No issuer found for ${issuer}, not authorized.`);
-            throw ApplicationError.NotAuthorizedError();
-        }
+        if(!_issuer)
+            throw new NotAuthorizedError(subject, `Issuer ${issuer} not found.`);
     }
 
     /**
@@ -76,10 +101,10 @@ export class JwtValidator {
     async validate(token) {
         try {
             let _decoded = this.decodeToken(token);
-            let _config = this.getIssuer(_decoded.payload.iss);
+            let _config = this.getIssuer(_decoded.payload.iss, _decoded.payload.iss);
             let _skew = _config.skew || 5;
 
-            this.log.info(`Authorizing subject ${_decoded.payload.sub} for issuer ${_decoded.payload.iss} using audience ${_decoded.payload.iss}.`)
+            this.log.info(`Authorizing subject ${_decoded.payload.sub} for issuer ${_decoded.payload.iss} using audience ${_decoded.payload.aud}.`)
 
             const _client = new _config.issuer.Client({
                 client_id: _config.audiance,
@@ -91,18 +116,16 @@ export class JwtValidator {
             });
 
             // Example checks for audience and other claims can be added here
-            if(verifiedToken.aud !== _config.audiance) {
-                this.log.threat(`Invalid audience ${verifiedToken.aud}, forbidden.`);
-                throw ApplicationError.ForbiddenError();
-            }
+            if(verifiedToken.aud !== _config.audiance)
+                throw new ForbiddenError(_decoded.payload.sub, `Invalid audience ${verifiedToken.aud}.`);
 
             let _roles = _config.defaultRoles;
 
             return new JwtSubject(verifiedToken, await this._roleFactory.getRoles(verifiedToken, _roles));
         }
         catch(error) {
-            this.log.threat(`Error validating JWT token.`, error);
-            throw ApplicationError.NotAuthorizedError("Not Authorized", error);
+            if(isInstanceOf(ApplicationError, error)) throw error;
+            throw new NotAuthorizedError(null, error);
         }
     }
 }
@@ -112,7 +135,7 @@ export class JwtValidator {
  * @author Robert R Murrell
  */
 export class JwtPlugin extends AbstractPlugin {
-    static get $object() {return {type: "https://api.krinvestentsllc.com/v1.0.0/JwtPlugin"}};
+    static get $object() {return {type: "https://api.azure-expressjs.com/v1.0.0/JwtPlugin"}};
 
     static ATTRIBUTE_NAME = "attributeName";
     static ATTRIBUTE_SUBJECT = "subject";
@@ -169,7 +192,7 @@ export class JwtPlugin extends AbstractPlugin {
  * @abstract
  */
 export class AbstractMatchType {
-    static get $object() {return {type: "https://api.krinvestentsllc.com/v1.0.0/AbstractMatchType"}};
+    static get $object() {return {type: "https://api.azure-expressjs.com/v1.0.0/AbstractMatchType"}};
     constructor(link = null) {
         this.link = link;
     }
@@ -200,7 +223,7 @@ export class AbstractMatchType {
      * @abstract
      */
     static create(link) {
-        throw ApplicationError.NotImplementedError();
+        throw new MethodNotImplementedError();
     }
 }
 
@@ -208,7 +231,7 @@ export class AbstractMatchType {
  * @description Tests the source matches any string element in target
  */
 export class MatchAny extends AbstractMatchType {
-    static get $object() {return {type: "https://api.krinvestentsllc.com/v1.0.0/MatchAny"}};
+    static get $object() {return {type: "https://api.azure-expressjs.com/v1.0.0/MatchAny"}};
     constructor(link = null) {
         super(link);
     }
@@ -226,7 +249,7 @@ export class MatchAny extends AbstractMatchType {
  * @description Tests the source matches all string elements in target,without regard for ordering.
  */
 export class MatchAll extends AbstractMatchType {
-    static get $object() {return {type: "https://api.krinvestentsllc.com/v1.0.0/MatchAll"}};
+    static get $object() {return {type: "https://api.azure-expressjs.com/v1.0.0/MatchAll"}};
     constructor(link = null) {
         super(link);
     }
@@ -244,7 +267,7 @@ export class MatchAll extends AbstractMatchType {
  * @description Tests the source matches all string elements in target,without regard for ordering.
  */
 export class MatchNone extends AbstractMatchType {
-    static get $object() {return {type: "https://api.krinvestentsllc.com/v1.0.0/MatchNone"}};
+    static get $object() {return {type: "https://api.azure-expressjs.com/v1.0.0/MatchNone"}};
     constructor(link = null) {
         super(link);
     }
@@ -270,15 +293,15 @@ export function secure(roles = [], match = MatchAny.create(), options = {}) {
         try {
             /**@type{ApplicationContext}*/let _context = /**@type{ApplicationContext}*/req.app.get(ApplicationContext.name);
             if(!_context)
-                next(ApplicationError.NotAuthorizedError("Application Context not found."));
+                next(new NotAuthorizedError(null, "Application Context not found."));
             else {
                 /**@type{PluginManager}*/let _pluginManager = /**@type{PluginManager}*/_context.getManager(PluginManager);
                 if(!_pluginManager)
-                    next(ApplicationError.NotAuthorizedError("Plugin Manager not found."));
+                    next(new NotAuthorizedError(null, "Plugin Manager not found."));
                 else {
                     /**@type{JwtPlugin}*/let _jwtPlugin = /**@type{JwtPlugin}*/_pluginManager.getPlugin(JwtPlugin);
                     if(!_jwtPlugin)
-                        next(ApplicationError.NotAuthorizedError("JWT Plugin not found."));
+                        next(new NotAuthorizedError(null, "JWT Plugin not found."));
                     else {
                         let _subjectAttributeName = await _jwtPlugin.getAttributeName(options);
                         let _strict = await _jwtPlugin.getStrict(options);
@@ -291,9 +314,9 @@ export function secure(roles = [], match = MatchAny.create(), options = {}) {
                         }
 
                         if(_subject.isExpired && _strict)
-                            next(ApplicationError.NotAuthorizedError(`Subject ${_subject.subject} token expired and strict is enabled.`));
+                            next(new NotAuthorizedError(_subject.subject,"Subject token expired and strict is enabled."));
                         else if(!match.match(_subject.roles, roles))
-                            next(ApplicationError.ForbiddenError(`Subject ${_subject.subject} failed to match roles, forbidden.`));
+                            next(new ForbiddenError(_subject.subject, "Subject failed to match roles."));
                         else
                             next();
                     }

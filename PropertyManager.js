@@ -1,3 +1,25 @@
+/*
+ * Copyright (c) 2024, KRI, LLC. All rights reserved
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining
+ * a copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
+ */
+
 import moment from "moment";
 import _ from "lodash";
 import {AbstractApplicationManager} from "./AbstractApplicationManager.js";
@@ -7,7 +29,6 @@ import {AbstractPropertyFactory} from "./AbstractPropertyFactory.js";
 import {AppConfigPropertyFactory} from "./AppConfigPropertyFactory.js";
 import {AppConfigurationClient} from "@azure/app-configuration";
 import {SecretClient} from "@azure/keyvault-secrets";
-
 
 /**
  * @typedef {Object} CacheControlOverride
@@ -52,7 +73,7 @@ import {SecretClient} from "@azure/keyvault-secrets";
  *
  */
 export class ApplicationProperties {
-    static get $object() {return {type: "https://api.krinvestentsllc.com/v1.0.0/ApplicationProperties"}};
+    static get $object() {return {type: "https://api.azure-expressjs.com/v1.0.0/ApplicationProperties"}};
     /**
      * @description
      * @param {import('ApplicationContext').ApplicationContext} context
@@ -121,7 +142,7 @@ export class ApplicationProperties {
 }
 
 export class CachedProperty {
-    static get $object() {return {type: "https://api.krinvestentsllc.com/v1.0.0/CachedProperty"}};
+    static get $object() {return {type: "https://api.azure-expressjs.com/v1.0.0/CachedProperty"}};
     constructor(cache = true, maxAge = "5m", value = null , raw = true) {
         this._cache = cache;
         this._maxAge = maxAge;
@@ -161,7 +182,7 @@ export class CachedProperty {
  *
  */
 export class NamespacedApplicationProperties extends ApplicationProperties {
-    static get $object() {return {type: "https://api.krinvestentsllc.com/v1.0.0/NamespacedApplicationProperties"}};
+    static get $object() {return {type: "https://api.azure-expressjs.com/v1.0.0/NamespacedApplicationProperties"}};
     /**
      * @description
      * @param {ApplicationProperties} source
@@ -199,7 +220,7 @@ export class NamespacedApplicationProperties extends ApplicationProperties {
 }
 
 export class CachedApplicationProperties extends ApplicationProperties {
-    static get $object() {return {type: "https://api.krinvestentsllc.com/v1.0.0/CachedApplicationProperties"}};
+    static get $object() {return {type: "https://api.azure-expressjs.com/v1.0.0/CachedApplicationProperties"}};
     /**
      * @description
      * @param {ApplicationProperties} source
@@ -356,7 +377,7 @@ export class CachedApplicationProperties extends ApplicationProperties {
 }
 
 export class PropertyManager extends AbstractApplicationManager {
-    static get $object() {return {type: "https://api.krinvestentsllc.com/v1.0.0/PropertyManager"}};
+    static get $object() {return {type: "https://api.azure-expressjs.com/v1.0.0/PropertyManager"}};
 
     /**
      * @description

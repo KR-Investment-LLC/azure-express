@@ -1,5 +1,25 @@
-import { v4 as uuidv4 } from 'uuid';
-import moment from 'moment';
+/*
+ * Copyright (c) 2024, KRI, LLC. All rights reserved
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining
+ * a copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
+ */
+
 import { promises as fs } from "fs";
 import path from "path";
 
@@ -63,21 +83,28 @@ export function isTypeOf(source, target) {
 }
 
 export class ApplicationError extends Error {
-  static get $object() {return {type: "https://api.krinvestentsllc.com/v1.0.0/ApplicationError"}};
+  static get $object() {return {type: "https://api.azure-expressjs.com/v1.0.0/ApplicationError"}};
 
   /**
    * @param {string} message
    * @param {number} code
-   * @param {null|Error|Object} cause
+   * @param {*} cause
    */
   constructor(message = "Internal Server Error", code = 500, cause = null) {
     super(message);
     /**@type{number}*/this._code = code;
-    this._cause = cause;
+    /**@type{*}*/this._cause = cause;
   }
 
   /**@returns{number}*/get code() {return this._code;}
-  get cause() {return this._cause;}
+  /**@returns{*}*/get cause() {return this._cause;}
+
+  safe() {
+    return {
+      code: this._code,
+      message: this.message
+    }
+  }
 
   static fromError(error) {
     if(isInstanceOf(ApplicationError, error)) return error;
@@ -85,57 +112,173 @@ export class ApplicationError extends Error {
     else if(typeof error === "object") return new ApplicationError(error.toString(), 500, error);
     else return new ApplicationError(String(error), 500, error);
   }
+}
 
-  static BadGatewayError(cause = null, message = "Bad Gateway") {
-    return new ApplicationError(message, 502, cause);
+/**
+ * @abstract
+ */
+export class AbstractRequestError extends ApplicationError {
+  static get $object() {return {type: "https://api.azure-expressjs.com/v1.0.0/AbstractRequestError"}};
+
+  constructor(message = "Internal Server Error", code = 500, method, path,  cause = null, ) {
+    super(message, code, cause);
+    this._method = method;
+    this._path = path;
   }
 
-  static BadRequestError(cause = null, message = "Bad Request") {
-    return new ApplicationError(message, 400, cause);
+  get method() {return this._method;}
+  get path() {return this._path;}
+
+  safe() {
+    let _safe = super.safe();
+    _safe.method = this._method;
+    _safe.path = this._path;
+    return _safe;
+  }
+}
+
+export class BadGatewayError extends AbstractRequestError {
+  static get $object() {return {type: "https://api.azure-expressjs.com/v1.0.0/BadGatewayError"}};
+
+  constructor(method, path, cause = null) {
+    super("Bad Gateway", 502, method, path, cause);
+  }
+}
+
+export class BadRequestError extends AbstractRequestError {
+  static get $object() {return {type: "https://api.azure-expressjs.com/v1.0.0/BadRequestError"}};
+
+  constructor(method, path, errors) {
+    super("Bad Request", 400, method, errors);
+    this._errors = errors;
   }
 
-  static ConflictError(cause = null, message = "Conflict") {
-    return new ApplicationError(message, 409, cause);
+  get errors() {return this._errors;}
+
+  safe() {
+    let _safe = super.safe();
+    _safe.errors = this._errors;
+    return _safe;
+  }
+}
+
+export class ConflictError extends AbstractRequestError {
+  static get $object() {return {type: "https://api.azure-expressjs.com/v1.0.0/ConflictError"}};
+
+  constructor(method, path, cause = null) {
+    super("Conflict", 409, method, path, cause);
+  }
+}
+
+export class ForbiddenError extends  ApplicationError {
+  static get $object() {return {type: "https://api.azure-expressjs.com/v1.0.0/ForbiddenError"}};
+
+  constructor(subject = null, cause = null) {
+    super("Forbidden", 403, cause);
+    this._subject = subject;
   }
 
-  static ForbiddenError(cause = null, message = "Forbidden") {
-    return new ApplicationError(message, 403, cause);
+  /**@type{null|string}*/get subject() {return this._subject;}
+
+  safe() {
+    let _safe = super.safe();
+    this._subject && (_safe.subject = this._subject);
+    return _safe;
+  }
+}
+
+export class GatewayTimeoutError extends  AbstractRequestError {
+  static get $object() {return {type: "https://api.azure-expressjs.com/v1.0.0/GatewayTimeoutError"}};
+
+  constructor(method, path, cause = null) {
+    super("Gateway Timeout", 504, method, path, cause);
+  }
+}
+
+export class MethodNotAllowedError extends  AbstractRequestError {
+  static get $object() {return {type: "https://api.azure-expressjs.com/v1.0.0/MethodNotAllowedError"}};
+
+  constructor(method, path, cause = null) {
+    super("Method Not Allowed", 405, method, path, cause);
+  }
+}
+
+export class MethodNotImplementedError extends  ApplicationError {
+  static get $object() {return {type: "https://api.azure-expressjs.com/v1.0.0/MethodNotImplementedError"}};
+
+  constructor(cause = null) {
+    super("Not Implemented", 501, cause);
+  }
+}
+
+export class MiddlewareStallError extends AbstractRequestError {
+  static get $object() {return {type: "https://api.azure-expressjs.com/v1.0.0/MiddlewareStallError"}};
+
+  constructor(method, path, cause = null) {
+    super("Middleware stall detected", 500, method, path, cause);
   }
 
-  static GatewayTimeoutError(cause = null, message = "Gateway Timeout") {
-    return new ApplicationError(message, 504, cause);
+  safe() {
+    let _safe = super.safe();
+    _safe.message = "Internal Server Error";
+    return _safe;
+  }
+}
+
+export class MovedPermanentlyError extends  AbstractRequestError {
+  static get $object() {return {type: "https://api.azure-expressjs.com/v1.0.0/MovedPermanentlyError"}};
+
+  constructor(method, path, cause = null) {
+    super("Moved Permanently", 301, method, path, cause);
+  }
+}
+
+export class NotAuthorizedError extends  ApplicationError {
+  static get $object() {return {type: "https://api.azure-expressjs.com/v1.0.0/NotAuthorizedError"}};
+
+  constructor(subject = null, cause = null) {
+    super("Not Authorized", 401, cause);
+    this._subject = subject;
   }
 
-  static MethodNotAllowedError(cause = null, message = "Method Not Allowed") {
-    return new ApplicationError(message, 405, cause);
-  }
+  /**@type{null|string}*/get subject() {return this._subject;}
 
-  static MovedPermanentlyError(cause = null, message = "Moved Permanently") {
-    return new ApplicationError(message, 301, cause);
+  safe() {
+    let _safe = super.safe();
+    this._subject && (_safe.subject = this._subject);
+    return _safe;
   }
+}
 
-  static NotAuthorizedError(cause = null, message = "Not Authorized") {
-    return new ApplicationError(message, 401, cause);
+export class NotImplementedError extends  AbstractRequestError {
+  static get $object() {return {type: "https://api.azure-expressjs.com/v1.0.0/NotImplementedError"}};
+
+  constructor(method, path, cause = null) {
+    super("Not Implemented", 501, method, path, cause);
   }
+}
 
-  static NotFoundError(cause = null, message = "Not Found") {
-    return new ApplicationError(message, 404, cause);
+export class PageNotFoundError extends AbstractRequestError {
+  static get $object() {return {type: "https://api.azure-expressjs.com/v1.0.0/PageNotFoundError"}};
+
+  constructor(method, path, cause = null) {
+    super("Not Found", 404, method, path, cause);
   }
+}
 
-  static InternalServerError(cause = null, message = "Internal Server Error") {
-    return new ApplicationError(message, 501, cause);
+export class ServiceUnavailableError extends AbstractRequestError {
+  static get $object() {return {type: "https://api.azure-expressjs.com/v1.0.0/ServiceUnavailableError"}};
+
+  constructor(method, path) {
+    super("Service Unavailable", 503, method, path);
   }
+}
 
-  static NotImplementedError(cause = null, message = "Not Implemented") {
-    return new ApplicationError(message, 501, cause);
-  }
+export class UnprocessableEntityError extends AbstractRequestError {
+  static get $object() {return {type: "https://api.azure-expressjs.com/v1.0.0/UnprocessableEntityError"}};
 
-  static ServiceUnavailableError(cause = null, message = "Service Unavailable") {
-    return new ApplicationError(message, 503, cause);
-  }
-
-  static UnprocessableEntityError(cause = null, message = "Unprocessable Entity") {
-    return new ApplicationError(message, 422, cause);
+  constructor(method, path, cause = null) {
+    super("Unprocessable Entity", 422, method, path, cause);
   }
 }
 
@@ -149,57 +292,4 @@ export async function loadJsonFromFile(file, reviver = null) {
     const _path = path.resolve(file);
     const _contents = await fs.readFile(_path, 'utf-8');
     return JSON.parse(_contents, reviver);
-}
-
-export class TransactionHeader {
-  static get $object() {return {type: "https://api.krinvestentsllc.com/v1.0.0/TransactionHeader"}};
-  constructor(status = 200, message = "OK", txid = uuidv4(), corrid = uuidv4(),
-              dateTime = moment()) {
-    this._status = status;
-    this._message = message;
-    this._txid = txid;
-    this._corrid = corrid;
-    this._dateTime = dateTime;
-  }
-
-  pretty() {
-    return {
-      status: this._status,
-      txid: this._txid,
-      corrid: this._corrid,
-      dateTime: this._dateTime
-    };
-  }
-}
-
-export class RestRequest {
-  static get $object() {return {type: "https://api.krinvestentsllc.com/v1.0.0/RestRequest"}};
-  constructor(header, payload) {
-    this._header = header;
-    this._payload = payload;
-  }
-}
-
-export class RestResponse {
-  static get $object() {return {type: "https://api.krinvestentsllc.com/v1.0.0/RestResponse"}};
-
-  /**
-   * @param {TransactionHeader} header
-   * @param {*} payload
-   */
-  constructor(header, payload) {
-    this._header = header;
-    this._payload = payload;
-  }
-
-  get header() {return this._header;}
-  get payload() {return this._payload;}
-  set payload(payload) {this._payload = payload}
-}
-
-export class ErrorResponse extends RestResponse {
-  static get $object() {return {type: "https://api.krinvestentsllc.com/v1.0.0/ErrorResponse"}};
-  constructor(header, error) {
-    super(header, error);
-  }
 }

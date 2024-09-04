@@ -1,61 +1,49 @@
-import {ApplicationError, ErrorResponse, isInstanceOf, RestResponse} from "./Global.js";
+/*
+ * Copyright (c) 2024, KRI, LLC. All rights reserved
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining
+ * a copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
+ */
 
-const _DEFAULT_PAYLOAD_TYPE = "https://api.krinvestentsllc.com/v1.0.0/Object";
-const _PRIMITIVE_PAYLOAD_TYPE = "https://api.krinvestentsllc.com/v1.0.0/Primative";
-
-export function fromError(error, req, res, code) {
-    return null
-}
-
-export function fromResponse(reply, req, res, code) {
-    if(isInstanceOf(RestResponse, reply)) // are we ResResponse?
-        return reply;
-    if(isInstanceOf(ApplicationError, reply) || reply instanceof Error) // are we an error?
-        return fromError(reply, req, res, 500);
-    if(reply && typeof reply === "object") // are we just a pol?
-        return new RestResponse();
-    else // anything else
-        return new RestResponse();
-}
+import {ApplicationError, isInstanceOf} from "./Global.js";
 
 /**
  *
- * @param {RestResponse} reply
+ * @param {*} response
  * @param {import('express').Request} req
  * @param {import('express').Response} res
  * @param {number} [code]
+ * @param {string} [message]
  */
-export function reply(reply, req, res, code = 200) {
-    let _reply = fromResponse(reply, req, res, code);
-
-    if(_reply.header.status === 204)
-        res.status(204).send(""); // sent no-content response.
-    else {
-        let _bodyType =  _DEFAULT_PAYLOAD_TYPE;
-
-        if(!_reply.payload)
-            _reply.payload = {};
-        else if(typeof _reply.payload === "object" && _reply.payload.constructor.$object)
-            _bodyType = _reply.payload.constructor.$object;
-        else
-            _bodyType = _PRIMITIVE_PAYLOAD_TYPE;
-
-        res.status(_reply.header.status).json({
-            $object: _reply.constructor.$object,
-            header: _reply.header,
-            payload: {
-                $object: {
-                    type: _bodyType
-                },
-                body: _reply.payload
-            }
-        });
-    }
+export function reply(response = {}, code = 200, message = "OK", req, res) {
+    if(response === undefined || response === null || response === "")
+        code = 204;
+    if(code === 204)
+        res.status(code).send(); // sent no-content response.
+    else if(!response)
+        res.status(code).send(message);
+    else
+        res.status(code).json(response);
 }
 
 export function ReplyHandler(req, res, next) {
-    res.reply = (reply, code = 200) => {
-        reply(reply, req, res, code);
+    res.reply = (response, code = 200, message = "OK") => {
+        reply(response, code, message, req, res);
     };
     next();
 }

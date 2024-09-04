@@ -1,16 +1,36 @@
+/*
+ * Copyright (c) 2024, KRI, LLC. All rights reserved
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining
+ * a copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
+ */
+
 import {AbstractPlugin} from "./AbstractPlugin.js";
 import {JSON} from "mocha/lib/reporters/index.js";
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import Ajv from 'ajv';
-import {ApplicationError, RestRequest} from "./Global.js";
+import {ApplicationError, BadRequestError} from "./Global.js";
 import {ApplicationContext} from "./ApplicationContext.js";
-import {APPLICATION_LOG} from "./ApplicationLog.js";
 import {PluginManager} from "./PluginManager.js";
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 /**
  * @typedef {Object} SchemaPluginConfig
@@ -24,7 +44,7 @@ const __dirname = path.dirname(__filename);
  * @author Robert R Murrell
  */
 export class SchemaPlugin extends AbstractPlugin {
-    static get $object() {return {type: "https://api.krinvestentsllc.com/v1.0.0/SchemaPlugin"}};
+    static get $object() {return {type: "https://api.azure-expressjs.com/v1.0.0/SchemaPlugin"}};
 
     static ATTRIBUTE_NAME = "attributeName";
     static ATTRIBUTE_SCHEMA_PATH = "attributeName";
@@ -94,18 +114,18 @@ function validSchema(validator, value, schema, options = {requireSchema: true}) 
     }
     else {
         if(!(_valid = !options.requireSchema))
-            throw ApplicationError.BadRequestError(`Schema ${schema} not found.`);
+            throw ApplicationError.fromError(`Schema ${schema} not found.`);
     }
 
     return _valid;
 }
 
 /**
- *
+ * @param {string} schema
  * @param options
  * @returns {(function(*, *, *): (*|undefined))|*}
  */
-export function validate(options = {attributeName: "schema", requireSchema: true}) {
+export function validate(schema, options = {attributeName: "schema", requireSchema: true}) {
     return async (/**@type{import('express').Request}*/req, /**@type{import('express').Response}*/res, next) => {
         try {
             /**@type{ApplicationContext}*/let _context = /**@type{ApplicationContext}*/req.app.get(ApplicationContext.name);
@@ -121,15 +141,11 @@ export function validate(options = {attributeName: "schema", requireSchema: true
                         next(ApplicationError.InternalServerError("Schema Plugin not found."));
                     else {
                         options.requireSchema = await _schemaPlugin.getRequireSchema(options);
-                        /**@type{Ajv}*/let _validator = _schemaPlugin.validator;
-                        if(validSchema(_validator, req.body, RestRequest.$object.type, options)) {
-                            if (validSchema(_validator, req.body.payload, req.body.payload.$object.type, options))
-                                next();
-                            else
-                                next(ApplicationError.BadRequestError(options.errors));
-                        }
+                        /**@type{Ajv}*/let _validator = /**@type{Ajv}*/_schemaPlugin.validator;
+                        if(validSchema(_validator, req.body, schema, options))
+                            next();
                         else
-                            next(ApplicationError.BadRequestError(options.errors));
+                            next(new BadRequestError(req.method, req.url, options.errors));
                     }
                 }
             }
